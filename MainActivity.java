@@ -1,14 +1,20 @@
 package sherzodbek.flashlight;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
+import android.os.BatteryManager;
 import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageButton;
+import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends AppCompatActivity {
@@ -18,6 +24,9 @@ public class MainActivity extends AppCompatActivity {
     Boolean isFlash = false;
     Boolean isOn = false;
     String status;
+    TextView textView;
+    FlashLightReceiver flashLightReceiver;
+    int level;
     //ishladi) zur) tushundizmi nima qilganimni? ha hatoyim manifestga Recivier class ni qushmaganimmi?
     // 1. broadcastni register qilishni ikki yuli bor. dynamically va manifest orqali. manifest orqasli qushsangiz
     // har bir balolarni hardoyim eshituradide. agar sizga vaqtinchalik kerak bulsa, unda activity, yoki fragmenti ichida register qilib,
@@ -33,50 +42,59 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         imageButton = (ImageButton) findViewById(R.id.image);
+        textView = (TextView) findViewById(R.id.textView);
+
+
+        textView.setText("Battery Level Remaining: " + level + "%");
+        Log.d("Batt", String.valueOf(level));
+
+
         if (getApplicationContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH)) {
             camera = Camera.open();
-            try {
+
                 parameters = camera.getParameters();
-            }catch (Exception e){
-                Toast.makeText(this,
-                        "The permission for camera could be disabled and should " +
-                                "be enabled from the app settings. Settings -> Apps -> [Your App] -> Permissions",
-                        Toast.LENGTH_SHORT);
-            }
+                if(camera==null) {
+
+                        Toast.makeText(this,
+                                "The permission for camera could be disabled and should " +
+                                        "be enabled from the app settings. Settings -> Apps -> [Your App] -> Permissions",
+                                Toast.LENGTH_SHORT);
+                    }
+
 
             isFlash = true;
         }
         imageButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-            if (isFlash){
-                if (!isOn){
-                    imageButton.setImageResource(R.drawable.off);
-                    parameters.setFlashMode(Camera.Parameters.FLASH_MODE_TORCH);
-                    camera.setParameters(parameters);
-                    camera.startPreview();
-                    isOn = true;
-                }else {
-                    imageButton.setImageResource(R.drawable.on);
-                    parameters.setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
-                    camera.setParameters(parameters);
-                    camera.stopPreview();
-                    isOn = false;
-                }
-            }else {
-                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
-                builder.setTitle("Error.....");
-                builder.setMessage("FlashLight is not available this device");
-                builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialogInterface, int i) {
-                        dialogInterface.dismiss();
-                        finish();
+                if (isFlash) {
+                    if (!isOn) {
+                        imageButton.setImageResource(R.drawable.off);
+                        parameters.setFlashMode(Camera.Parameters.FLASH_MODE_TORCH);
+                        camera.setParameters(parameters);
+                        camera.startPreview();
+                        isOn = true;
+                    } else {
+                        imageButton.setImageResource(R.drawable.on);
+                        parameters.setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
+                        camera.setParameters(parameters);
+                        camera.stopPreview();
+                        isOn = false;
                     }
-                });
-                AlertDialog alertDialog = builder.create();
-                alertDialog.show();
-            }
+                } else {
+                    AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+                    builder.setTitle("Error.....");
+                    builder.setMessage("FlashLight is not available this device");
+                    builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialogInterface, int i) {
+                            dialogInterface.dismiss();
+                            finish();
+                        }
+                    });
+                    AlertDialog alertDialog = builder.create();
+                    alertDialog.show();
+                }
             }
         });
     }
@@ -84,7 +102,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
-        if (camera!=null){
+        if (camera != null) {
             camera.release();
             camera = null;
         }
@@ -94,9 +112,10 @@ public class MainActivity extends AppCompatActivity {
     public void broadcastMessage() {
         Intent intent = new Intent();
         intent.setAction("com.example.flashlight.LightWidgetReceiver.LIGHT_STATUS");
-        intent.putExtra("Status",status);
+        intent.putExtra("Status", status);
         sendBroadcast(intent);
     }
+
     public void connectCameraService() {
         if (camera == null) {
             camera = android.hardware.Camera.open();
@@ -138,7 +157,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -161,14 +179,29 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-//        if (!isFlash){
-//            onFlashLight();
-//        }
+
     }
 
     @Override
     protected void onStart() {
         super.onStart();
         connectCameraService();
+    }
+
+    private void batteryLevel() {
+        BroadcastReceiver batteryLevelReceiver = new BroadcastReceiver() {
+            public void onReceive(Context context, Intent intent) {
+                context.unregisterReceiver(this);
+                int rawlevel = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+                int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+                level = -1;
+                if (rawlevel >= 0 && scale > 0) {
+                    level = (rawlevel * 100) / scale;
+                }
+
+            }
+        };
+        IntentFilter batteryLevelFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+        this.registerReceiver(batteryLevelReceiver, batteryLevelFilter);
     }
 }
