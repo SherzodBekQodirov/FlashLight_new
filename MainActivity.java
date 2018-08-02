@@ -11,13 +11,14 @@ import android.os.BatteryManager;
 import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
 import android.view.View;
 import android.widget.ImageButton;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends AppCompatActivity {
+    private Context mContext;
     ImageButton imageButton;
     Camera camera;
     Camera.Parameters parameters;
@@ -25,17 +26,8 @@ public class MainActivity extends AppCompatActivity {
     Boolean isOn = false;
     String status;
     TextView textView;
-    FlashLightReceiver flashLightReceiver;
-    int level;
-    //ishladi) zur) tushundizmi nima qilganimni? ha hatoyim manifestga Recivier class ni qushmaganimmi?
-    // 1. broadcastni register qilishni ikki yuli bor. dynamically va manifest orqali. manifest orqasli qushsangiz
-    // har bir balolarni hardoyim eshituradide. agar sizga vaqtinchalik kerak bulsa, unda activity, yoki fragmenti ichida register qilib,
-    // ondestroyga unregister qivorish tugriroq. Receiver haida bitta uqib chiqing. teroiyani
-    // 2. keyin intent widgetniichida broadcastga post qilish uchun intent berish kerak. intentga action berishiz kerak, chtoby faqat
-    // usha actionni abrobatka qilish uchun
-    // 3. intent filter qushganimiz, manifestda, receiver uchun,  va usha filterdan boshqa actionlarni return qivoramiz, receiverni onreceive metodida
-    // vaqtiz bulganda ozmoz, receiverni qarang, intent filterm va pending inten ni bitta qarab chiqing. ok
-
+    private int mProgressStatus = 0;
+    ProgressBar progressBar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,12 +35,11 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         imageButton = (ImageButton) findViewById(R.id.image);
         textView = (TextView) findViewById(R.id.textView);
+        progressBar = (ProgressBar) findViewById(R.id.pb);
 
-
-        textView.setText("Battery Level Remaining: " + level + "%");
-        Log.d("Batt", String.valueOf(level));
-
-
+        mContext = getApplicationContext();
+        IntentFilter iFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+        mContext.registerReceiver(mBroadcastReceiver,iFilter);
         if (getApplicationContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH)) {
             camera = Camera.open();
 
@@ -187,21 +178,17 @@ public class MainActivity extends AppCompatActivity {
         super.onStart();
         connectCameraService();
     }
+    private BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE,-1);
+            int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL,-1);// Display the battery level in TextView
+            float percentage = level/ (float) scale;
+            mProgressStatus = (int)((percentage)*100);
 
-    private void batteryLevel() {
-        BroadcastReceiver batteryLevelReceiver = new BroadcastReceiver() {
-            public void onReceive(Context context, Intent intent) {
-                context.unregisterReceiver(this);
-                int rawlevel = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-                int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-                level = -1;
-                if (rawlevel >= 0 && scale > 0) {
-                    level = (rawlevel * 100) / scale;
-                }
+            textView.setText("" + mProgressStatus + "%");
+            progressBar.setProgress(mProgressStatus);
+        }
+    };
 
-            }
-        };
-        IntentFilter batteryLevelFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
-        this.registerReceiver(batteryLevelReceiver, batteryLevelFilter);
-    }
 }
